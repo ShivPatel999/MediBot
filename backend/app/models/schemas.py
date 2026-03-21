@@ -6,25 +6,14 @@ class ChatRequest(BaseModel):
 
 class Medication(BaseModel):
     name: str
-    used_for: str
-    dosage: str
-    side_effects: str
-    warnings: str
-
-class TriageGuidance(BaseModel):
-    urgency_level: str
-    possible_causes: List[str]
-    self_care: List[str]
-    when_to_see_doctor: str
-
-class SymptomAnalysis(BaseModel):
-    symptom: str
-    severity: str = "Not specified"
-    duration: str = "Not specified"
+    purpose: str
+    how_to_use: str
 
 class ChatResponse(BaseModel):
-    is_emergency: bool = False
-    emergency_message: Optional[str] = None
-    analysis: Optional[SymptomAnalysis] = None
-    triage: Optional[TriageGuidance] = None
+    is_medical: bool
+    chat_message: str
+    symptom: Optional[str] = None
+    severity: Optional[str] = None
+    urgency: Optional[str] = None
     medications: Optional[List[Medication]] = []
+    warning_signs: Optional[str] = None

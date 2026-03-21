@@ -3,8 +3,21 @@ import ChatWindow from './components/ChatWindow';
 
 function App() {
   return (
-    <div style={{ backgroundColor: '#f4f7f6', minHeight: '100vh', padding: '20px' }}>
-      <h1 style={{ textAlign: 'center', color: '#2c3e50', fontFamily: 'sans-serif' }}>Medibot Triage Assistant</h1>
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #1a365d 0%, #2b6cb0 100%)',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '20px'
+    }}>
+      <h1 style={{ color: 'white', marginBottom: '24px', fontFamily: 'sans-serif', fontSize: '28px', letterSpacing: '1px' }}>
+        🩺 Medibot
+      </h1>
+      <p style={{ color: 'rgba(255,255,255,0.75)', marginBottom: '24px', marginTop: '-16px', fontSize: '14px' }}>
+        OTC Medication & Symptom Guidance Assistant
+      </p>
       <ChatWindow />
     </div>
   );
