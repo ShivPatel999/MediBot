@@ -173,6 +173,5 @@ Returns the complete list of supported medical conditions and symptoms the syste
 ## 🙏 Acknowledgements
 
 - [Groq](https://groq.com) for ultra-fast LLM inference
-- [Meta](https://ai.meta.com) for the Llama 3.1 model
 - [HuggingFace](https://huggingface.co/datasets/s200862/medical_qa_meds) for the medical QA dataset
 - [FastAPI](https://fastapi.tiangolo.com) for the backend framework
