@@ -1,8 +1,21 @@
 # 🩺 Medibot — AI-Powered Medical Information Assistant
 
-Medibot is a full-stack AI chatbot that helps users identify OTC medication options, understand symptoms, and get general health guidance. Built with React, FastAPI, and Llama 3.1 via Groq, containerized with Docker.
+Medibot is an AI-powered chatbot designed to help users identify OTC medication options, understand symptoms, and receive general health guidance. It combines a React-based frontend with a FastAPI backend, powered by the Llama 3.1 language model via Groq's inference platform.
 
 > ⚕️ **Disclaimer:** Medibot provides general information only. It is not a substitute for professional medical advice, diagnosis, or treatment. Always consult a qualified healthcare professional.
+
+---
+
+## 📖 About the Project
+
+Medibot bridges the gap between symptom awareness and accessible health information. Rather than encouraging self-diagnosis, it empowers users with knowledge about:
+
+- **Symptom Analysis** — Helps users understand what their symptoms might indicate
+- **OTC Medication Information** — Provides factual details about over-the-counter treatment options
+- **Health Education** — Answers general questions about conditions, causes, and wellness
+- **Emergency Detection** — Identifies critical situations and recommends immediate professional help
+
+The system prioritizes safety through multiple layers: a hardcoded emergency response system, a verified medical knowledge base (no hallucinated medications), and careful language that avoids making diagnoses.
 
 ---
 
@@ -51,44 +64,6 @@ medibot/
 ├── docker-compose.yml
 ├── .env.example
 └── README.md
-```
-
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running
-- A free [Groq API key](https://console.groq.com)
-
-### 1. Clone the repository
-```bash
-git clone https://github.com/your-username/medibot.git
-cd medibot
-```
-
-### 2. Set up your API key
-```bash
-cp .env.example .env
-```
-Open `.env` and add your key:
-```
-GROQ_API_KEY=gsk_your_key_here
-```
-
-### 3. Launch
-```bash
-docker compose up --build
-```
-
-### 4. Open in browser
-- **Chat UI:** http://localhost:5173
-- **API:** http://localhost:8000
-- **API Docs:** http://localhost:8000/docs
-
-### 5. Stop
-```bash
-docker compose down
 ```
 
 ---
@@ -185,85 +160,13 @@ Depression, Anxiety, Stress, PTSD, Bipolar Disorder, OCD, ADHD, Grief, Eating Di
 
 ---
 
-## 🔧 Development
-
-### Rebuild after code changes
-```bash
-docker compose down && docker compose up --build
-```
-
-### View live logs
-```bash
-docker logs medibot-backend-1
-docker logs medibot-frontend-1
-```
-
-### Add a new condition
-Open `backend/app/db/init_db.py` and add to `MOCK_DB`:
-```python
-"condition name": {
-    "urgency": "Low",
-    "aliases": ["alternate name", "common typo"],
-    "symptoms": ["symptom 1", "symptom 2"],
-    "causes": "Brief explanation.",
-    "meds": [
-        {
-            "name": "Medication Name",
-            "purpose": "What it treats",
-            "how_to_use": "Dosage and instructions."
-        }
-    ],
-    "warning": "When to seek medical attention."
-}
-```
-Then rebuild: `docker compose up --build`
-
----
-
-## 📋 API Reference
+## 🛰️ API Endpoints
 
 ### POST `/api/chat/`
-
-**Request:**
-```json
-{
-  "message": "I have a headache",
-  "history": [
-    { "role": "user", "content": "hi" },
-    { "role": "assistant", "content": "Hello! I'm Medibot..." }
-  ]
-}
-```
-
-**Response:**
-```json
-{
-  "is_medical": true,
-  "chat_message": "Headaches are very common...",
-  "symptom": "headache",
-  "severity": "Not specified",
-  "urgency": "Low",
-  "medications": [
-    {
-      "name": "Acetaminophen (Tylenol)",
-      "purpose": "Pain relief and fever reduction",
-      "how_to_use": "325-650mg every 4-6 hours. Do not exceed 3000mg/day."
-    }
-  ],
-  "warning_signs": "Seek emergency care if worst headache of your life..."
-}
-```
+Sends a message to the AI assistant with optional conversation history for context awareness.
 
 ### GET `/api/triage/symptoms`
-Returns list of all supported conditions.
-
----
-
-## 🌐 Environment Variables
-
-| Variable | Description | Required |
-|---|---|---|
-| `GROQ_API_KEY` | Your Groq API key from console.groq.com | Yes |
+Returns the complete list of supported medical conditions and symptoms the system can help with.
 
 ---
 
