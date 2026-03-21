@@ -1,5 +1,6 @@
 import os
 import json
+from datetime import date
 from groq import AsyncGroq
 from app.models.schemas import ChatResponse
 from app.db.init_db import MOCK_DB
@@ -7,7 +8,32 @@ from pydantic import ValidationError
 
 client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
 
+def get_slim_db():
+    """Send only condition names + aliases to save tokens. Full data fetched separately."""
+    slim = {}
+    for condition, data in MOCK_DB.items():
+        slim[condition] = {
+            "aliases": data.get("aliases", []),
+            "urgency": data.get("urgency", "Low"),
+            "meds": [m["name"] for m in data.get("meds", [])],
+            "warning": data.get("warning", "")
+        }
+    return slim
+
+def get_condition_data(user_input: str):
+    """Find the best matching condition from user input."""
+    user_lower = user_input.lower()
+    for condition, data in MOCK_DB.items():
+        if condition in user_lower:
+            return condition, data
+        for alias in data.get("aliases", []):
+            if alias in user_lower:
+                return condition, data
+    return None, None
+
 async def generate_medibot_response(user_input: str) -> ChatResponse:
+    today = date.today().strftime("%B %d, %Y")
+
     manual_schema = {
         "type": "object",
         "properties": {
@@ -32,23 +58,36 @@ async def generate_medibot_response(user_input: str) -> ChatResponse:
         "required": ["is_medical", "chat_message"]
     }
 
-    system_prompt = f"""
-    You are Medibot, a friendly medical information assistant.
+    # Try to pre-match the condition so we only send relevant data
+    condition_name, condition_data = get_condition_data(user_input)
 
-    KNOWLEDGE BASE:
-    {json.dumps(MOCK_DB, indent=2)}
+    if condition_data:
+        # Send only the matched condition — keeps prompt short
+        db_context = json.dumps({condition_name: condition_data}, indent=2)
+    else:
+        # Send slim version of full DB for matching
+        db_context = json.dumps(get_slim_db(), indent=2)
 
-    RULES:
-    1. Greetings ("hi", "hello"): set is_medical=false, respond warmly, ask how you can help.
-    2. Symptoms detected: set is_medical=true.
-       - Explain the symptom in chat_message.
-       - Pull urgency, warning_signs, and medications ONLY from the KNOWLEDGE BASE.
-       - If symptom not in knowledge base, say so and recommend seeing a doctor.
-    3. Always end with: "Note: I am an AI, not a doctor."
+    conditions_list = ", ".join(MOCK_DB.keys())
 
-    Respond ONLY in valid JSON matching this schema:
-    {json.dumps(manual_schema)}
-    """
+    system_prompt = f"""You are Medibot, a medical information assistant.
+Today's date is {today}.
+Supported conditions: {conditions_list}
+
+RELEVANT KNOWLEDGE:
+{db_context}
+
+RULES:
+1. Greetings ("hi","hello"): is_medical=false, introduce yourself, list supported conditions.
+2. Date questions: is_medical=false, answer with {today}.
+3. General questions ("what is X", "what causes X"): is_medical=false, answer helpfully.
+4. Any symptom/health complaint: is_medical=true.
+   - Use the RELEVANT KNOWLEDGE above for medications, urgency, warning_signs.
+   - Handle typos charitably.
+   - Unknown symptom: is_medical=true, medications=[], recommend seeing a doctor.
+5. Always end chat_message with: "Note: I am an AI, not a doctor."
+
+Respond ONLY in valid JSON: {json.dumps(manual_schema)}"""
 
     try:
         completion = await client.chat.completions.create(
@@ -58,7 +97,7 @@ async def generate_medibot_response(user_input: str) -> ChatResponse:
                 {"role": "user", "content": user_input}
             ],
             response_format={"type": "json_object"},
-            temperature=0.2
+            temperature=0.1
         )
 
         raw_json = completion.choices[0].message.content
@@ -68,7 +107,7 @@ async def generate_medibot_response(user_input: str) -> ChatResponse:
         print(f"Validation Error: {e}")
         return ChatResponse(
             is_medical=False,
-            chat_message="I had trouble formatting that response. Could you rephrase your symptoms?"
+            chat_message="I had trouble with that. Try asking about a symptom like 'I have a headache'."
         )
     except Exception as e:
         print(f"Groq Error: {e}")
