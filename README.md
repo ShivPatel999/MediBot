@@ -13,3 +13,6 @@ An AI-powered triage and OTC medication assistant.
 
 
 docker compose up --build
+
+
+http://localhost:5173
