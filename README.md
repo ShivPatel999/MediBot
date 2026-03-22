@@ -178,7 +178,7 @@ Returns the complete list of supported medical conditions and symptoms the syste
 
 
 # How to run
-Make sure you have Docker installed.
+Make sure you have Docker installed and running.
 
 docker compose down && docker compose up --build
 
