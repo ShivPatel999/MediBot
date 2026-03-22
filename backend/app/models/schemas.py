@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 class ChatMessage(BaseModel):
-    role: str  # "user" or "assistant"
+    role: str
     content: str
 
 class ChatRequest(BaseModel):
@@ -12,13 +12,13 @@ class ChatRequest(BaseModel):
 class Medication(BaseModel):
     name: str
     purpose: str
-    how_to_use: str
+    how_to_use: Optional[str] = "Follow package instructions."
 
 class ChatResponse(BaseModel):
     is_medical: bool
     chat_message: str
-    symptom: Optional[str] = None
-    severity: Optional[str] = None
-    urgency: Optional[str] = None
+    symptom: Optional[str] = ""
+    severity: Optional[str] = ""
+    urgency: Optional[str] = ""
     medications: Optional[List[Medication]] = []
-    warning_signs: Optional[str] = None
+    warning_signs: Optional[str] = ""

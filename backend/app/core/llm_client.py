@@ -1,11 +1,13 @@
 import os
 import json
-from datetime import date
+import httpx
+import pytz
+from datetime import datetime
 from groq import AsyncGroq
 from app.models.schemas import ChatResponse, ChatMessage
 from app.db.init_db import MOCK_DB, MEDICAL_QA
-from pydantic import ValidationError
 from typing import List
+from bs4 import BeautifulSoup
 
 client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
 
@@ -27,10 +29,55 @@ def get_condition_data(user_input: str, history: List[ChatMessage] = []):
                     return condition, data
     return None, None
 
-async def generate_medibot_response(user_input: str, history: List[ChatMessage] = []) -> ChatResponse:
-    today = date.today().strftime("%B %d, %Y")
+async def web_search(query: str) -> str:
+    """Search DuckDuckGo and scrape real results for up-to-date information."""
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        search_url = f"https://html.duckduckgo.com/html/?q={query.replace(' ', '+')}"
 
-    # Simplified schema — all fields optional except the two required ones
+        async with httpx.AsyncClient(timeout=8.0, headers=headers, follow_redirects=True) as http:
+            response = await http.get(search_url)
+
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        results = []
+        for result in soup.select(".result__snippet")[:4]:
+            text = result.get_text(strip=True)
+            if text and len(text) > 30:
+                results.append(text)
+
+        if results:
+            combined = " | ".join(results)
+            print(f"Web search found {len(results)} results for: {query}")
+            return combined[:1500]
+
+        return ""
+
+    except Exception as e:
+        print(f"Web search error: {e}")
+        return ""
+
+def needs_web_search(user_input: str) -> bool:
+    """Detect questions that need real-time or statistical data."""
+    web_keywords = [
+        "which country", "what country", "highest rate", "lowest rate",
+        "most common", "statistics", "how many people", "percentage",
+        "latest", "recent", "current", "2024", "2025", "2026",
+        "worldwide", "globally", "in the world", "according to",
+        "who has the most", "which nation", "prevalence", "rate of",
+        "news", "update", "new treatment", "new study", "research shows",
+        "how common is", "how many", "what percent", "outbreak",
+        "mortality rate", "survival rate", "life expectancy"
+    ]
+    user_lower = user_input.lower()
+    return any(kw in user_lower for kw in web_keywords)
+
+async def generate_medibot_response(user_input: str, history: List[ChatMessage] = []) -> ChatResponse:
+    eastern = pytz.timezone("America/New_York")
+    today = datetime.now(eastern).strftime("%B %d, %Y")
+
     manual_schema = {
         "type": "object",
         "properties": {
@@ -47,7 +94,8 @@ async def generate_medibot_response(user_input: str, history: List[ChatMessage] 
                         "name": {"type": "string"},
                         "purpose": {"type": "string"},
                         "how_to_use": {"type": "string"}
-                    }
+                    },
+                    "required": ["name", "purpose", "how_to_use"]
                 }
             },
             "warning_signs": {"type": "string"}
@@ -73,8 +121,15 @@ async def generate_medibot_response(user_input: str, history: List[ChatMessage] 
 
     conditions_list = ", ".join(MOCK_DB.keys())
 
-    system_prompt = f"""You are Medibot, a medical information assistant.
-Today: {today}.
+    # Fetch real-time web data if needed
+    web_context = ""
+    if needs_web_search(user_input):
+        web_data = await web_search(user_input)
+        if web_data:
+            web_context = f"\nREAL-TIME WEB SEARCH RESULTS (use this for accuracy):\n{web_data}\n"
+
+    system_prompt = f"""You are Medibot, an accurate and up-to-date medical information assistant.
+Today's date: {today}.
 Supported conditions: {conditions_list}
 
 KNOWLEDGE BASE:
@@ -82,23 +137,28 @@ KNOWLEDGE BASE:
 
 GENERAL QA:
 {json.dumps(MEDICAL_QA)}
+{web_context}
 
-CRITICAL RULES:
-1. ALWAYS return valid JSON with exactly these two fields at minimum: "is_medical" (boolean) and "chat_message" (string). Never omit them. Never return null for them.
-2. For non-medical responses set: is_medical=false, medications=[], and leave symptom/severity/urgency/warning_signs as empty strings "".
-3. For medical responses set: is_medical=true and fill in all fields from KNOWLEDGE BASE.
+CRITICAL ACCURACY RULES:
+1. ALWAYS return valid JSON with "is_medical" (boolean) and "chat_message" (string). Never null.
+2. If REAL-TIME WEB SEARCH RESULTS are provided, prioritize them over your training data for statistics, rates, and current information. Always use the most up-to-date figures available.
+3. For medical responses: is_medical=true, fill all fields from KNOWLEDGE BASE. EVERY medication MUST have "name", "purpose", and "how_to_use" — never omit any field.
+4. For non-medical responses: is_medical=false, medications=[], empty strings for other fields.
+5. Be specific and accurate. If web data gives a specific number or country, use it. Do not generalize when specific data is available.
+6. If you are unsure or data might be outdated, say so clearly in the response.
 
 BEHAVIOR:
-- Greetings ("hi","hello"): is_medical=false, introduce yourself, list all supported conditions.
-- Date questions: is_medical=false, answer with {today}.
-- General questions ("what is X", "what are symptoms of X", "what causes X", "tell me more", "how do I treat X"): is_medical=false, answer helpfully in 2-3 short sentences using KNOWLEDGE BASE and GENERAL QA. Use conversation history for context — if the user asks "what are the symptoms" look at the previous message to know what condition they mean.
-- Symptom complaints ("I have X", "my X hurts"): is_medical=true, pull meds/urgency/warnings from KNOWLEDGE BASE.
-- Follow-ups ("what else", "more options", "give me alternatives"): is_medical=true, use the symptom from conversation history.
-- Medication questions ("tell me about ibuprofen"): is_medical=false, explain in 2-3 sentences.
-- FORMAT: Write chat_message as plain short sentences only. No bullet points, no dashes, no numbered lists. Max 80 words.
-- Always end chat_message with: "Note: I am an AI, not a doctor."
+- Greetings ("hi", "hello"): is_medical=false, introduce yourself warmly, list supported conditions.
+- Date questions: is_medical=false, answer exactly: "Today is {today}."
+- Statistical questions ("which country", "highest rate", "how many people", "prevalence"): is_medical=false. Use REAL-TIME WEB SEARCH RESULTS if available. Give specific accurate numbers and sources. If no web data, answer from knowledge but note it may not be current.
+- General medical questions ("what is X", "causes of X", "symptoms of X", "how to treat X"): is_medical=false, answer clearly in 2-3 sentences using KNOWLEDGE BASE and GENERAL QA. Use conversation history for context on follow-ups.
+- Symptom complaints ("I have X", "my X hurts", "I feel X"): is_medical=true, pull all medications, urgency, and warning_signs from KNOWLEDGE BASE.
+- Follow-ups ("what else", "more options", "alternatives", "tell me more"): use conversation history to determine the topic being discussed.
+- Medication questions ("tell me about ibuprofen", "is X safe"): is_medical=false, give accurate explanation.
+- FORMAT: Write chat_message as plain flowing sentences. No bullet points, dashes, or numbered lists inside chat_message. Maximum 100 words. Be warm, clear, and accurate.
+- Always end every chat_message with: "Note: I am an AI, not a doctor."
 
-OUTPUT FORMAT — respond ONLY with this JSON structure, no other text:
+OUTPUT — respond ONLY with this exact JSON structure:
 {{
   "is_medical": true or false,
   "chat_message": "your response here",
@@ -119,23 +179,34 @@ OUTPUT FORMAT — respond ONLY with this JSON structure, no other text:
 
     try:
         completion = await client.chat.completions.create(
-            model="llama-3.1-8b-instant",
+            # Upgraded to 70B model — much more accurate and knowledgeable
+            model="llama-3.3-70b-versatile",
             messages=messages,
             response_format={"type": "json_object"},
-            temperature=0.1
+            temperature=0.1,
+            max_tokens=1024
         )
 
         raw_json = completion.choices[0].message.content
         parsed = json.loads(raw_json)
 
-        # Manually ensure required fields always exist
+        # Ensure how_to_use always exists in every medication
+        medications = parsed.get("medications") or []
+        fixed_medications = []
+        for med in medications:
+            fixed_medications.append({
+                "name": med.get("name", ""),
+                "purpose": med.get("purpose", ""),
+                "how_to_use": med.get("how_to_use") or "Follow package instructions and consult a pharmacist."
+            })
+
         safe_response = {
             "is_medical": bool(parsed.get("is_medical", False)),
-            "chat_message": str(parsed.get("chat_message", "I'm not sure how to answer that. Could you rephrase?")),
+            "chat_message": str(parsed.get("chat_message", "I am not sure how to answer that. Could you rephrase?")),
             "symptom": parsed.get("symptom") or "",
             "severity": parsed.get("severity") or "",
             "urgency": parsed.get("urgency") or "",
-            "medications": parsed.get("medications") or [],
+            "medications": fixed_medications,
             "warning_signs": parsed.get("warning_signs") or ""
         }
 
