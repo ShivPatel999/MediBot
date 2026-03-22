@@ -183,4 +183,4 @@ docker compose down && docker compose up --build
 http://localhost:5173/
 
 
-# THANK YOU!!!!!!
+# THANK YOU!!!!!!!
