@@ -181,3 +181,6 @@ Returns the complete list of supported medical conditions and symptoms the syste
 docker compose down && docker compose up --build
 
 http://localhost:5173/
+
+
+# THANK YOU!!!!!!
