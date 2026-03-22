@@ -178,6 +178,8 @@ Returns the complete list of supported medical conditions and symptoms the syste
 
 
 # How to run
+Make sure you have Docker installed.
+
 docker compose down && docker compose up --build
 
 http://localhost:5173/
