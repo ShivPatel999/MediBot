@@ -175,3 +175,9 @@ Returns the complete list of supported medical conditions and symptoms the syste
 - [Groq](https://groq.com) for ultra-fast LLM inference
 - [HuggingFace](https://huggingface.co/datasets/s200862/medical_qa_meds) for the medical QA dataset
 - [FastAPI](https://fastapi.tiangolo.com) for the backend framework
+
+
+# How to run
+docker compose down && docker compose up --build
+
+http://localhost:5173/
